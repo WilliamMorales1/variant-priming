@@ -1,0 +1,13 @@
+name: variant-priming
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - numpy>=2.0
+  - pandas>=2.0
+  - praat-parselmouth>=0.4.3
+  - statsmodels>=0.14
+  - pytorch>=2.6
+  - transformers>=4.40
+  - pytest>=8
+  - ruff>=0.6

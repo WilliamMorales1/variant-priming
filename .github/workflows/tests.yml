@@ -1,0 +1,21 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: conda-incubator/setup-miniconda@v4.1.0
+        with:
+          miniforge-version: latest
+          environment-file: environment.yml
+          activate-environment: variant-priming
+      - run: ruff check . && ruff format --check .
+        shell: bash -el {0}
+      # Tests use --metric formant only, so no WavLM download.
+      - run: pytest
+        shell: bash -el {0}

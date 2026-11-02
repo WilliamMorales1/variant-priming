@@ -1,0 +1,41 @@
+# Participant recordings and TextGrids: personal data, never public.
+corpus/
+*.wav
+*.TextGrid
+speakers.csv
+
+# Analysis output (derived from the recordings)
+results/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.venv/
+*.egg-info/
+build/
+.ipynb_checkpoints/
+
+# LaTeX build files (method.pdf stays tracked)
+*.aux
+*.log
+*.out
+*.toc
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+
+# Editors, OS, local tooling
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+.claude/
+AGENTS.md
+.env
+
+# Local planning notes
+plan.md
+*.docx

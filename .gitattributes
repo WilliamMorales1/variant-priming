@@ -1,0 +1,5 @@
+*.py text eol=lf
+*.praat text eol=lf
+*.tex text eol=lf
+*.pdf binary
+*.docx binary

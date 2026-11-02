@@ -1,0 +1,166 @@
+\documentclass[11pt]{article}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{tipa}
+\setlist{nosep}
+
+\title{Calculations in \texttt{analyse\_priming.py}}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section*{Overview}
+Each sentence $s$ has two model talker recordings, $T^A_s$ and $T^B_s$, which differ in one or more nonfinal mid vowels (sites $V_k$). A participant hears one version $h \in \{A,B\}$ and repeats it, giving recording $S$. For each site the script asks whether the participant's vowel is closer to the model talker's vowel in version $h$ or in version $o$ (the other one).
+
+\section{Locating the sites in the participant recording}
+
+\paragraph{Features.} Praat computes 12 MFCCs ($c_1\ldots c_{12}$; $c_0$ is dropped) with a 15\,ms window every 10\,ms. Their deltas (\texttt{numpy.gradient} over time) are appended, giving a 24-dimensional vector $\mathbf{x}_t$ for each frame.
+
+\paragraph{Silence trimming.} A frame counts as speech if its Praat intensity $I_t$ satisfies $I_t > \max_t I_t - 35\,\mathrm{dB}$. The span from the first to the last speech frame is kept, widened by 50\,ms on each side so that a quiet onset (a voiceless fricative, a released stop) is not clipped. Inside the span, any run of non-speech frames of 250\,ms or more is removed, apart from 50\,ms at each edge, so hesitation pauses do not have to be absorbed by the warping. Only the kept frames are aligned.
+
+\paragraph{Normalization.} Cepstral mean and variance normalization is applied per recording, over the kept frames:
+\[
+\tilde{\mathbf{x}}_t = \frac{\mathbf{x}_t - \boldsymbol{\mu}}{\boldsymbol{\sigma}}.
+\]
+This removes a recording's constant channel and speaker coloring, and part of the model talker/participant difference.
+
+\paragraph{Dynamic time warping.} Let the model talker have frames $\tilde{\mathbf{x}}_1\ldots\tilde{\mathbf{x}}_n$ and the participant $\tilde{\mathbf{y}}_1\ldots\tilde{\mathbf{y}}_m$. The local cost is $c(i,j) = \lVert\tilde{\mathbf{x}}_i - \tilde{\mathbf{y}}_j\rVert_2$, and the accumulated cost is
+\[
+D(i,j) = c(i,j) + \min\{D(i-1,j-1),\ D(i-1,j),\ D(i,j-1)\}, \qquad D(0,0)=0.
+\]
+$D(i,j)$ is only computed inside a Sakoe--Chiba band around the diagonal, of half-width $w = \max(0.25\max(n,m),\ |n-m|)+1$ frames. Backtracking from $(n,m)$ gives the path $P$, and its mean cost $\bar c = D(n,m)/|P|$ measures how well the two recordings match.
+
+\paragraph{Projection from both versions.} Each path gives a mapping $f$ from model talker time to participant time: for each model talker frame the matched participant times are averaged, and $f$ interpolates linearly between frames. The participant is aligned with both model versions, giving $f_h$ and $f_o$, and a model talker site $[a,b]$ becomes
+\[
+\left[\tfrac12\bigl(f_h(a^h) + f_o(a^o)\bigr),\ \tfrac12\bigl(f_h(b^h) + f_o(b^o)\bigr)\right].
+\]
+An earlier version projected from the heard version only. The interval then fell where the participant's audio looked most like the heard recording, so even participants who never imitated were measured as closer to the heard version (Section~\ref{sec:valid}). Averaging both projections makes the two versions play the same role. The intervals go to \texttt{.auto.TextGrid} for manual checking; a hand-corrected \texttt{.TextGrid} replaces them. A file whose $\bar c$ (the mean over both alignments) exceeds the corpus median by more than $4\times1.4826\,\mathrm{MAD}$ is flagged (\texttt{check\_alignment}): this usually means a restart, a long hesitation or a misplaced projection.
+
+\section{Measuring the vowels}
+
+\paragraph{WavLM features.} Vowels are compared in hidden layer 24 of WavLM-large, a self-supervised speech model (\texttt{microsoft/wavlm-large}): one 20\,ms frame $\mathbf{h}_t$ per step. Each recording gets the same per-utterance mean/variance normalization as the MFCCs, then $\hat{\mathbf{h}}_t = \tilde{\mathbf{h}}_t/\lVert\tilde{\mathbf{h}}_t\rVert$ (cosine geometry). The frames inside each vowel interval $I$ are mean-pooled, $\bar{\mathbf{h}} = \frac{1}{|I|}\sum_{t\in I}\hat{\mathbf{h}}_t$. Alignment stays on MFCCs, because the 20\,ms hop placed boundaries less precisely.
+
+\paragraph{Formants (\texttt{-{}-metric formant}).} Praat's Burg method finds 5 formants below a ceiling $C$, with a 25\,ms window. $F_1$ and $F_2$ are averaged over the central 50\% of the interval, $[a + \tfrac{d}{4},\ b - \tfrac{d}{4}]$ with $d=b-a$, to avoid the steepest transitions.
+
+\paragraph{Consonant context.} Neighbouring consonants shift vowel formants: a uvular \textipa{/K/} lowers $F_2$ and raises $F_1$ near it, \textipa{/z j/} raise $F_2$, labials lower all formants. In this design every comparison is between the same word said by the model talker and by the participant, so those shifts are shared and cancel, as long as the two are measured the same way and normalized over the same words. The script keeps both conditions:
+\begin{itemize}[leftmargin=*]
+\item \emph{Same window.} Model talker and participant are both measured over the central half of the site. Measuring each token over its own steadiest half (the half whose log $F_1$/$F_2$ vary least) was tried and scored worse (44 vs.\ 52/80, before the change below): at \texttt{S03 V2} (\textipa{[KO]}/\textipa{[Ko]} before \textipa{[zj]}) it fell from 6/8 to 1--3/8, because the steadiest half lay in different parts of the vowel for different speakers. A median over 2.5\,ms frames also scored worse.
+\item \emph{Same reference words} (below): the ceiling search and the normalization compare each participant reference vowel with the model talker's in the same word.
+\end{itemize}
+Pooled quantities still mix contexts: the contrast direction $\mathbf u_{ab}$, its size $\Delta_{ab}$ and spread $\nu_{ab}$. They set the scale of \texttt{position} and the \texttt{uncertain} band, not the decision, which uses the site's own model talker midpoint.
+
+$R$ sites are reference vowels (\textipa{[i a u]}) that are the same in both versions. Every sentence must have at least 2 (2--3 recommended, covering \textipa{[a i u]} across the corpus). A reference token is \emph{implausible} if its formants are impossible for its label ($[i]$: $F_1 \le 700$, $F_2 \ge 1500$; $[a]$: $450 \le F_1 \le 1200$, $900 \le F_2 \le 2300$; $[u]$: $F_1 \le 550$, $F_2 \le 1600$\,Hz), which usually means a misplaced interval or a tracking error; such tokens are dropped.
+
+\paragraph{Ceiling per speaker.} Unless \texttt{speakers.csv} fixes it, $C$ is chosen per speaker from 4500 to 6500\,Hz in 250\,Hz steps, after Escudero et al.\ (2009): the best ceiling makes each reference vowel's tokens most consistent. For a participant, each token is first compared with the model talker's token of the same word, $\log\mathbf F_r - \log\mathbf F^T_{k(r)}$ (the model talker's mean over both versions, at the model talker's ceiling, chosen first). Consonant effects then cancel, and a spread between \textipa{[Ka]} and \textipa{[la]} no longer counts against a ceiling. With $\ell$ a reference label, $R_\ell$ its plausible tokens, $\mathbf v_r$ the log formants (minus the model talker's for a participant) and $N$ all the speaker's reference tokens,
+\[
+\begin{gathered}
+Q(C) = \sum_\ell \sum_{r\in R_\ell} \bigl\lVert \mathbf{v}_r(C) - \overline{\mathbf{v}}_\ell(C) \bigr\rVert^2, \\
+C^* = \arg\min_C \frac{1}{N}\bigl(Q(C) + \#\{\text{implausible tokens at } C\}\bigr).
+\end{gathered}
+\]
+Log formants make the spread independent of the voice's range, and counting implausible tokens stops a ceiling from scoring well by losing tokens.
+
+\paragraph{Normalization from reference vowels.} Each speaker $p$ is Lobanov-normalized with a centre and spread computed from plausible $R$ tokens only. Let $K_p$ be the reference sites that participant $p$ and the model talker both kept. The participant's statistics and a model talker's statistics \emph{for this participant} are both computed over $K_p$, with each label weighted equally and each site equally within its label ($w_r = 1/(|K_{p,\ell}|\,n_{k(r)})$, $n_k$ the speaker's tokens at site $k$):
+\[
+\boldsymbol{\mu}_p = \frac{\sum_r w_r \mathbf{F}_r}{\sum_r w_r}, \qquad
+\boldsymbol{\sigma}_p^2 = \frac{\sum_r w_r (\mathbf{F}_r - \boldsymbol{\mu}_p)^2}{\sum_r w_r}, \qquad
+\mathbf{z} = \frac{\mathbf{F} - \boldsymbol{\mu}_p}{\boldsymbol{\sigma}_p}.
+\]
+The pool does not depend on which mid-vowel variants a participant chose. Because participant and model talker share the same words, a dropped token cannot change the context mix on one side only: if a participant loses \textipa{[Ki]}, whose $F_2$ is low, their mean $F_2$ rises, and without matching every one of their $z_2$ values would fall relative to the model talker's. The model talker's $z$ values, the direction $\mathbf u_{ab}$ and $\Delta_{ab}$ are therefore computed per participant. Equal label weights keep an extra \textipa{[a]} from pulling the centre toward \textipa{[a]}. It needs at least 3 tokens covering 2 labels and a non-zero spread; otherwise the speaker's tokens get no estimate.
+
+\section{Decision and statistics}
+
+\paragraph{Pooled contrast.} Both metrics use the same geometry. Let $\mathbf{g}$ be a token's features: $\bar{\mathbf{h}}$ for WavLM, $(z_1,z_2)$ for formants. For each vowel pair $\{a,b\}$ (e.g.\ \textipa{/e/--/E/}), the model talker's differences are pooled over the $K$ sites that contrast it, following Choi et al.\ (2026), who show that S3M representations encode phonological contrasts as roughly linear, shared directions:
+\[
+\boldsymbol\delta_k = \mathbf{g}^{T,a}_k - \mathbf{g}^{T,b}_k, \qquad
+\mathbf{u}_{ab} = \frac{\bar{\boldsymbol\delta}}{\lVert\bar{\boldsymbol\delta}\rVert}, \qquad
+\Delta_{ab} = \frac{1}{K}\sum_k \boldsymbol\delta_k\cdot\mathbf{u}_{ab}, \qquad
+\nu_{ab} = \tfrac12\,\mathrm{sd}_k(\boldsymbol\delta_k\cdot\mathbf{u}_{ab}).
+\]
+$\Delta_{ab}$ is the typical size of the contrast and $\nu_{ab}$ how far one model-talker token strays from it. The direction replaces the earlier fixed weight $\lambda=0.5$ on $F_2$: the model talker's own contrasts decide how much each dimension counts. With $K=1$ the direction is just that sentence's own difference, and the script warns.
+
+\paragraph{Position.} With $\mathbf{m}_k = (\mathbf{g}^{T,h}_k + \mathbf{g}^{T,o}_k)/2$ the site's model talker midpoint and $s=+1$ if the heard value is $a$ ($-1$ otherwise),
+\[
+x = s\,(\mathbf{g}^S - \mathbf{m}_k)\cdot\mathbf{u}_{ab}, \qquad
+\text{position} = \tfrac12 + \frac{x}{\Delta_{ab}}.
+\]
+Position 1 is a typical heard-version vowel and 0 a typical other-version vowel, in units of the model talker's pooled contrast, so $0.75$ means ``a quarter of the contrast past the midpoint, toward the heard version'' at every site. The estimated variant is the heard value if position $>\tfrac12$, else the other. The token is flagged \texttt{uncertain} if $|x| < \nu_{ab}$: it lies closer to the midpoint than one model-talker token's own spread, so the two versions cannot be told apart and the token should be coded by ear. For formants, \texttt{formant\_off\_axis} $= \lVert(\mathbf{g}^S-\mathbf{m}_k) - x s\,\mathbf{u}_{ab}\rVert/\Delta_{ab}$ is the distance from the contrast line in the same units; a large value suggests a third vowel quality rather than either variant.
+
+\paragraph{Mixed-effects model.} The test compares each participant's productions across conditions, not against chance. For each site $s$, call $R_s$ its alphabetically first version. Token $i$ by participant $j$ at item $k$ (sentence and site) has
+\[
+y_i = [\,\text{produced}_i = \text{label}(R_s)\,], \qquad
+x_i = \begin{cases} +\tfrac12 & \text{heard } R_s \\ -\tfrac12 & \text{heard the other} \end{cases}
+\]
+where ``produced'' is the perceptual code if present, else the estimated variant. The model is
+\[
+\operatorname{logit} P(y_i = 1) = \beta_0 + u_{0j} + w_k + (\beta_1 + u_{1j})\,x_i,
+\quad u_{0j}\sim\mathcal N(0,\sigma_0^2),\quad u_{1j}\sim\mathcal N(0,\sigma_1^2),\quad w_k\sim\mathcal N(0,\sigma_w^2).
+\]
+Priming predicts $\beta_1 > 0$. A participant who always produces the same variant has slope $\beta_1 + u_{1j} \approx 0$, whatever the match rate. It is fitted by variational Bayes (statsmodels \texttt{BinomialBayesMixedGLM}); the reported $p$ is the normal approximation $2\Phi(-|\hat\beta_1/\mathrm{sd}|)$.
+
+\paragraph{Permutation tests.} Because $\sigma_1$ is poorly estimated with few participants and the variational fit is approximate, \texttt{model.txt} also gives two tests that need neither. For each participant $j$ seen in both conditions,
+\[
+D_j = \overline{v}_{j,\,x=+1/2} - \overline{v}_{j,\,x=-1/2}, \qquad T = \frac1J\sum_j D_j,
+\]
+where $v$ is either $y$ or the position oriented toward $R_s$ ($\text{position}$ if $R_s$ was heard, $1-\text{position}$ otherwise). Each $D_j$ is a within-participant comparison: the participant's baseline, accent and vowel system cancel, and only the condition difference remains. Under the null hypothesis the heard version does not affect production, so the condition labels can be shuffled within each participant. The $p$ value is $(\#\{|T^*| \ge |T|\}+1)/(10^4+1)$ over $10^4$ shuffles.
+
+\paragraph{Agreement with the ear.} When tokens carry \texttt{value\_coded}, \texttt{model.txt} reports the share that agree with \texttt{value\_estimated} and Cohen's $\kappa = (p_o - p_e)/(1 - p_e)$, with $p_e$ the agreement expected from the two marginal distributions.
+
+\section{Validation on synthetic speech}\label{sec:valid}
+
+The test corpus is French TTS (piper): 6 sentences, 10 mid-vowel sites, 2--3 $R$ sites per sentence, and 4 fake participants (80 tokens). Two imitate the heard version and two always produce the same variant. The raw accuracy rewards bias toward the heard version: answering ``heard'' every time scores 60/80, because 60 of the 80 true values are the heard one. \texttt{tests/score.py} therefore also reports accuracy on the 20 tokens where the participant did \emph{not} produce the heard value, and the balanced mean of the two accuracies (0.5 = chance).
+
+\begin{center}\small
+\begin{tabular}{llcccc}
+\toprule
+metric & projection & correct/80 & balanced & group $p$ (GLMM) & fixed producers' slopes \\
+\midrule
+WavLM & heard only & 59 & 0.71 & 0.004 & $+1.06$, $+1.03$ \\
+WavLM (final) & both & 55 & 0.71 & 0.27 & $+0.05$, $+0.05$ \\
+formant (old) & heard only & 56 & 0.63 & 0.0001 & $+2.23$, $+1.76$ \\
+formant (final) & both & 46 & 0.60 & 1.00 & $-0.09$, $0.00$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+With the true productions the model gives the two imitators slopes of $+12.8$ and the fixed producers $+0.4$, with $p = 0.24$ for the group. Projecting from the heard version gave a falsely significant group slope with both metrics; projecting from both removes it, at the cost of under-rating one imitator. WavLM flags 51 of 80 tokens as uncertain: the model talker's own token-to-token spread is large next to its contrast, so most tokens need a listen. The permutation test on position gives $p = 0.04$ (group difference $+0.125$), driven mostly by one imitator ($+0.33$).
+
+The formant metric is close to chance on this corpus with every setting tried (balanced 0.51--0.66), and the final version flags 44 of 80 tokens as uncertain. The TTS model talker barely makes some of the contrasts (S01 \texttt{V1}: $F_1$ = 476 vs.\ 474\,Hz), so the corpus cannot tell whether the formant changes help. Each was tested separately against the others; on 20 non-heard tokens one token is 0.025 balanced, so every difference seen (at most $\pm0.06$) is within noise. They are kept because they address known biases, not because the data showed they help.
+
+A classifier that ignores the heard recording (trained on the model talker's $V$ tokens, then applied to each participant token alone) was also tried. On formants it was at chance on the model talker's own tokens (9--11/20, leave one sentence out) and scored 0.43--0.48 on participants. On WavLM, a nearest-category-mean rule scored 10/20 on the model talker and 0.69 on participants. It was not kept.
+
+Consonant context was checked by dropping the four reference vowels next to \textipa{/K/} (\textipa{[Ka]}, \textipa{[ZaK]}, \textipa{[Ki]} twice) from every participant. With matched pools, 4 of 80 decisions changed and \texttt{position} moved by 0.15 on average; with each speaker normalized over their own tokens, 15 changed and \texttt{position} moved by 0.55. On the full corpus, matching changes nothing (every speaker kept the same words, and the same ceilings were chosen), and weighting sites equally changed 3 decisions after one model-talker token was dropped (43 to 46/80, balanced 0.56 to 0.60).
+
+Pause removal was checked by inserting 400\,ms of silence into 12 participant files. Projected site onsets moved by 33\,ms on average (70\,ms in the worst file) with pause removal, and by 39\,ms (99\,ms) without it.
+
+\section{Remaining weaknesses}
+
+\begin{enumerate}[leftmargin=*,label=\arabic*.]
+\item \textbf{Validation.} Accuracy was checked only on synthetic TTS speech, where the formant metric is near chance and WavLM reaches 0.71 balanced. Real accuracy is unknown until the automatic estimates are compared with perceptual coding (agreement and $\kappa$ in \texttt{model.txt}) on real recordings.
+
+\item \textbf{Few reference tokens.} Normalization now uses reference vowels only, which removes the dependence on a participant's variant choices, but the pool is small (12--18 tokens per participant). One tracking error that passes the plausibility ranges still shifts the speaker's scale.
+
+\item \textbf{Residual heard bias.} Averaging both projections removes the asymmetry, but if the two model versions differ in timing, the averaged interval may sit off the vowel in both. Hand-checked TextGrids remain the best defence, and the final model should use \texttt{value\_coded}.
+
+\item \textbf{Model talker noise at the midpoint.} The decision boundary $\mathbf m_k$ still comes from one model-talker token per version. Pooling makes the scale ($\Delta_{ab}$) and the uncertainty band ($\nu_{ab}$) stable, but not the midpoint, which is kept site-specific so that coarticulation is shared by both model-talker tokens.
+
+\item \textbf{Alignment.} DTW still assumes the participant says the whole sentence in order. Pauses are now removed, but restarts and repeated words are not handled; \texttt{check\_alignment} only points to the files that need a listen.
+
+\item \textbf{Formants.} Only $F_1$/$F_2$ are used; the pooled direction weights them from the model talker's contrasts, but $F_3$ (rounding) is not measured. The ceiling search assumes the reference vowels are well placed.
+
+\item \textbf{Different consonants.} Consonant effects cancel only if the participant says the same consonants. A learner who replaces \textipa{/K/} with English \textipa{[\*r]} or a tap shifts the neighbouring vowel's $F_2$/$F_3$ for consonantal reasons, and the script reads that as a vowel difference. \texttt{formant\_off\_axis} may show it; listening to sites next to \textipa{/K/} is the real check. The synthetic corpus has no such participants.
+
+\item \textbf{Fixed parameters.} The 25\% band, 35\,dB threshold, 250\,ms pause, 50\,ms margin and central-50\% window are still set by hand. $\lambda$ is gone, and the uncertainty band comes from the model talker's own spread.
+
+\item \textbf{WavLM features.} They are opaque (no unit like Hz), need about 2\,GB of memory, and the model and layer were tuned on synthetic data only. The pooled direction needs several sentences per vowel pair.
+
+\item \textbf{Statistics.} The permutation tests do not depend on $\sigma_1$ or on the variational approximation, but with 4--10 participants they have little power, and shuffling within participants ignores item imbalance.
+\end{enumerate}
+
+\end{document}

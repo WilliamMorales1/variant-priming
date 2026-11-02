@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "variant-priming"
+version = "0.1.0"
+description = "Test whether hearing one of two recorded variants primes the variant a listener repeats."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=2.0",
+    "pandas>=2.0",
+    "praat-parselmouth>=0.4.3",
+    "statsmodels>=0.14",
+    "torch>=2.6",
+    "transformers>=4.40",
+]
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+# The script runs from the repo, nothing to install; the empty package only lets pip pull the dependencies.
+[tool.setuptools]
+packages = []
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
