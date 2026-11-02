@@ -2,7 +2,7 @@
 
 ![Tests](https://github.com/WilliamMorales1/variant-priming/actions/workflows/tests.yml/badge.svg)
 
-Does hearing one variant of a sentence prime a listener to produce that variant? Participants repeat sentences after hearing one of two recordings by a model talker. The two versions differ in phonetic variables, such as French nonfinal mid vowels (/e/~/ɛ/, /o/~/ɔ/, /ø/~/œ/) or optional liaison. `analyse_priming.py` aligns every repetition with both versions, places each vowel between the two model variants, and fits a mixed-effects model of produced variant ~ version heard. Liaison and other non-vowel sites are coded by ear; the script marks where each one falls.
+Does hearing one variant of a sentence prime a listener to produce that variant? Participants repeat sentences after hearing one of two recordings by a model talker. The two versions differ in phonetic variables, such as French nonfinal mid vowels (/e/\~/ɛ/, /o/\~/ɔ/, /ø/\~/œ/) or optional liaison. `analyse_priming.py` aligns every repetition with both versions, places each vowel between the two model variants, and fits a mixed-effects model of produced variant ~ version heard. Liaison and other non-vowel sites are coded by ear; the script marks where each one falls.
 
 Any language works as long as the variable sites are vowel-quality contrasts with a clear `a`, `i` or `u` nearby for normalization. [`sentences.txt`](sentences.txt) has example French stimuli, and [`method.pdf`](method.pdf) the method with its equations and weaknesses.
 
