@@ -6,6 +6,10 @@ Does hearing one variant of a sentence prime a listener to produce that variant?
 
 Any language works as long as the variable sites are vowel-quality contrasts with a clear `a`, `i` or `u` nearby for normalization. [`sentences.txt`](sentences.txt) has example French stimuli, and [`method.pdf`](method.pdf) the method with its equations and weaknesses.
 
+## Dependencies
+
+Python 3.10+ with numpy, pandas, praat-parselmouth (formants, TextGrids), statsmodels (mixed-effects model), PyTorch 2.6+ and transformers (WavLM metric). Dev: pytest, ruff. Pinned in `environment.yml` (conda) and `pyproject.toml` (pip); see [Setup](docs/setup.md). [Praat](https://www.fon.hum.uva.nl/praat/) is needed for annotation and `review_sites.praat`.
+
 ## Quick start
 
 ```fish
