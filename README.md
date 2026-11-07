@@ -4,7 +4,7 @@
 
 Does hearing one variant of a sentence prime a listener to produce that variant? Participants repeat sentences after hearing one of two recordings by a model talker. The two versions differ in phonetic variables, such as French nonfinal mid vowels (/e/\~/ɛ/, /o/\~/ɔ/, /ø/\~/œ/) or optional liaison. `analyse_priming.py` aligns every repetition with both versions, places each vowel between the two model variants, and fits a mixed-effects model of produced variant ~ version heard. Liaison and other non-vowel sites are coded by ear; the script marks where each one falls.
 
-Any language works as long as the variable sites are vowel-quality contrasts with a clear `a`, `i` or `u` nearby for normalization. [`sentences.txt`](sentences.txt) has example French stimuli, and [`method.pdf`](method.pdf) the method with its equations and weaknesses.
+Any language works as long as the variable sites are vowel-quality contrasts with a clear `a`, `i` or `u` nearby for normalization. Sample French recordings, transcripts, and word-aligned TextGrids live in `corpus/source/`. See [`method.pdf`](method.pdf) for equations and method limitations.
 
 ## Dependencies
 
@@ -31,6 +31,7 @@ A run peaks at about 2 GB of RAM and runs on a laptop CPU.
 - [Setup](docs/setup.md): conda, pip, CPU-only PyTorch, tests.
 - [Annotation](docs/annotation.md): corpus layout, model-talker TextGrids, formant ceilings, reviewing participant files.
 - [Output](docs/output.md): how a vowel is placed, `sites.csv` columns, `model.txt`, limits.
+- [Labeling](docs/labeling.md): denoising, the pair-labeling page, how `close_mid_vowel` was decided, mid-vowel F1/F2 charts.
 - [Validation](docs/validation.md): results on the synthetic TTS corpus and how to rebuild it.
 
 ## License

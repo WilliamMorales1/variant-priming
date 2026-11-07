@@ -20,6 +20,8 @@ pip install . --group dev          # drop --group dev to skip pytest and ruff
 
 The first `--metric vector` run downloads `microsoft/wavlm-large` (about 1.3 GB) into the Hugging Face cache. After that, `HF_HUB_OFFLINE=1` skips the network check. `--metric formant` loads no model.
 
+Charts in `plots/` also need matplotlib (`conda install matplotlib`); it is not pinned in `pyproject.toml` because the analysis does not use it. Denoising needs `ffmpeg`.
+
 `review_sites.praat` needs the [Praat](https://www.fon.hum.uva.nl/praat/) app (6.1 or later).
 
 ## Changing dependencies

@@ -4,13 +4,13 @@
 
 ```
 corpus/
-  model/S01_max.wav  S01_max.TextGrid             # two versions per sentence
-  model/S01_min.wav  S01_min.TextGrid
-  participants/P01_S01_max.wav                    # participant_sentence_versionHeard
+  model/S01_v1.wav  S01_v1.TextGrid               # two versions per sentence
+  model/S01_v2.wav  S01_v2.TextGrid
+  participants/P01_S01_v1.wav                    # participant_sentence_versionHeard
   speakers.csv                                    # optional: speaker,formant_ceiling
 ```
 
-No underscores inside IDs (`S01`, `P01`, `max`, `min`). Recordings and TextGrids are git-ignored: they are participant data.
+No underscores inside IDs (`S01`, `P01`, `v1`, `v2`). Recordings and TextGrids are git-ignored: they are participant data.
 
 ## Model talker TextGrids
 
